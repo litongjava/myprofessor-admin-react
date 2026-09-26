@@ -8,7 +8,7 @@ import React, { useEffect, useState } from 'react';
 type Kind = 'inferences' | 'videos' | 'conversations';
 type CostRow = Record<string, any>;
 type Report = { list: CostRow[]; total: number; summary: CostRow };
-const stages: Record<string, string> = { video: '视频生成', repair: '视频修复', cover: '封面（含修复）', context: '上下文整理', other: '其他推理' };
+const stages: Record<string, string> = { video: '视频生成', repair: '视频修复', cover: '封面', cover_repair: '封面修复', context: '上下文整理', other: '其他推理' };
 const statuses: Record<string, string> = {
   estimated: '已估算', estimated_cross_period: '跨时段估算', unsupported_provider: '厂商价格未配置',
   missing_usage: '缺少用量', invalid_usage: '用量异常', unknown_tariff: '模型价格未配置',
@@ -53,7 +53,8 @@ export default function LlmCosts() {
   const breakdown: ColumnsType<CostRow> = [
     { title: '视频生成', dataIndex: 'video_cost', render: money, width: 150 },
     { title: '视频修复', dataIndex: 'repair_cost', render: money, width: 150 },
-    { title: '封面（含修复）', dataIndex: 'cover_cost', render: money, width: 170 },
+    { title: '封面', dataIndex: 'cover_cost', render: money, width: 150 },
+    { title: '封面修复', dataIndex: 'cover_repair_cost', render: money, width: 150 },
     { title: '上下文整理', dataIndex: 'context_cost', render: money, width: 150 },
     { title: '其他推理', dataIndex: 'other_cost', render: money, width: 150 },
   ];
@@ -62,6 +63,7 @@ export default function LlmCosts() {
     { title: '视频 ID', dataIndex: 'group_id', width: 200, render: id => id ? <a onClick={() => navigate('videos', id)}>{id}</a> : '—' },
     { title: '用途', dataIndex: 'cost_stage', width: 150, render: stage => stages[stage] || '其他推理' },
     { title: '任务 / 修复点', dataIndex: 'task_name', width: 200 },
+    { title: '平台', dataIndex: 'provider', width: 130, render: v => v || '—' },
     { title: '模型', dataIndex: 'model', width: 210 },
     { title: '缓存命中', dataIndex: 'cache_hit_tokens', width: 110, render: v => v ?? '—' },
     { title: '未命中输入', dataIndex: 'cache_miss_tokens', width: 120, render: v => v ?? '—' },
@@ -83,7 +85,9 @@ export default function LlmCosts() {
   return <PageContainer title="AI 推理费用" subTitle="按推理、视频和 Ask 会话查看费用（人民币）">
     <Space direction="vertical" size="middle" style={{ width: '100%' }}>
       <Alert type="info" showIcon message="费用按调用时间和官方单价在后端实时计算。合计包含已记录的模型推理费用，不含语音、渲染机器及存储；历史漏记用量无法补回。"
-        description="Ask 会话只累计本会话新生成的视频及上下文整理，不重复计入引用的源视频。封面修复计入封面。— 表示暂无可计价记录，待计价调用不按零费用处理。" />
+        description="Ask 会话只累计本会话新生成的视频及上下文整理，不重复计入引用的源视频。封面与封面修复分别统计。— 表示暂无可计价记录，待计价调用不按零费用处理。" />
+      <Alert type="info" showIcon message="计价时段按每次请求开始时刻（北京时间）判断，不按查看页面的当前时间。"
+        description="DeepSeek 高峰为周一至周五（法定节假日除外）09:00–12:00、14:00–18:00，其余为闲时，周末全天闲时。DeepSeek 输入缓存默认开启；命中 0 表示本次未复用到缓存，不代表未开启。" />
       <Row gutter={[16, 16]}>
         <Col xs={24} sm={8}><Card><Statistic title="当前筛选 · 已计价合计" value={money(report.summary.total_cost)} /></Card></Col>
         <Col xs={12} sm={8}><Card><Statistic title="推理次数" value={report.summary.call_count || 0} /></Card></Col>
@@ -109,7 +113,9 @@ export default function LlmCosts() {
         <Descriptions column={1} bordered size="small" items={[
           { key: 'id', label: '推理 ID', children: detail.id },
           { key: 'task', label: '任务 / 修复点', children: detail.task_name || '—' },
-          { key: 'model', label: '模型 / 供应商', children: `${detail.model} / ${detail.provider}` },
+          { key: 'provider', label: '平台', children: detail.provider || '—' },
+          { key: 'model', label: '模型', children: detail.model || '—' },
+          { key: 'period', label: '计价时段', children: detail.billing_period === 'peak' ? '高峰' : detail.billing_period === 'off_peak' ? '闲时' : '—' },
           { key: 'time', label: '调用时间', children: time(detail.request_started_at) },
           { key: 'basis', label: '时间依据', children: detail.pricing_time_basis === 'request_start' ? '实际请求开始时刻' : '由历史完成时间和耗时推算' },
           { key: 'version', label: '价格版本', children: detail.pricing_version || '—' },
